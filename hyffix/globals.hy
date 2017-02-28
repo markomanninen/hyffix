@@ -12,7 +12,7 @@
 (defreader > [items] 
   (do
     ; transforming singular value to a list for the next for loop
-    (if (not (coll? items)) (setv items [items]))
+    (if-not (coll? items) (setv items [items]))
     (for [item items]
       ; discard duplicates
       (if-not (in item operators)
