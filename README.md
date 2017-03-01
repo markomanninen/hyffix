@@ -59,8 +59,33 @@ Use useful way to evaluate many formulas is to use deffix-n macro. Each of the f
 
 ## Custom operators
 
-All basic native operations are supported by deffix without any custom configuration. For example these are valid expressions:
+All basic native math operations (* / + - = !=) from Python are supported by deffix without any custom configuration. For example these are valid expressions:
 
 ```
+(deffix 1 + 2 - 3 * 4 / 5) ; -1.8
+(deffix (1 + 1) = 2)
+()
+```
 
+To define your own operators you can use defoperator macro:
+
+```
+(defoperator mod [x y] (% x y))
+(deffix 3 mod 2)
+```
+
+Basicly all operators with binary behaviour are good. So you can create a function that takes 1 or two arguments. Then macro will pass left and rigth side of the operator to the function.
+
+## Custom operands
+
+Operands can be any numeric, boolean and string value. To use variable as a operand you need to initialize it with defoperand macro:
+
+```
+(defoperand 'x 1 'y 1 'z 1)
+```
+
+Then it is possible to use them on the formula:
+
+```
+(deffix (x + (+ y (z +)))) ; 3
 ```

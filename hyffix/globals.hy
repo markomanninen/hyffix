@@ -2,7 +2,11 @@
 (eval-and-compile 
   ; without eval setv doesn't work as a global variable for macros
   (setv operators []
-        operators-precedence []))
+        operators-precedence []
+        operands {}))
+
+(defreader ^ [code]
+  (assoc operands (first code) (second code)))
 
 ; add support list for custom operators. note that
 ; native operands like + - * / = or any usual one

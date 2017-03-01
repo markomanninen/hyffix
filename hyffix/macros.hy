@@ -1,11 +1,62 @@
 #!/usr/bin/python3
 ; require > and < reader macros
-(require [hyffix.globals [< >]])
+(require [hyffix.globals [< > ^]])
 ; import operator list. this makes globals.hy executed first
 ; so that operators variable is found in the current scope
 ; setting variable in the same file by setv or eval-and-compile 
 ; didn't work. this will also import operators-precedence list
-(import (hyffix.globals (operators operators-precedence)))
+(import (hyffix.globals (operands operators operators-precedence)))
+
+; define operator function and set it to operators global list
+(defmacro defoperator [op-name params &rest body]
+  `(do 
+    (defn ~op-name ~params ~@body)
+    #>~op-name))
+
+; TODO: try to get operand setter to work via macro
+; so that there is no need to quote variables similar to:
+; (defoperand 'x 1 'y 1)
+;(defmacro defoperand [operand value] `#^[~operand ~value])
+
+(defn defoperand [&rest args]
+  (setv args (list args))
+  (if (even? (len args))
+      (while (pos? (len args))
+             (do
+               (assoc operands (first args) (second args))
+               (.remove args (get args 0))
+               (.remove args (get args 0))))
+      (raise (Exception "defoperand needs an even number of arguments"))))
+
+; function to change precedence order of the operations.
+; argument list will be passed to the #< readermacro which 
+; will reset arguments to a new operators-precedence list
+; example: (defprecedence * / + -)
+; or straight to the reader macro way: #<[* / + -]
+;
+; note that calling this macro will empty the previous list of precedence!
+; to keep the previous set one should use precedence+
+;
+; call (defprecedence) to empty the list to the default state
+; in that case left-wise order of precedence is used when evaluating
+; the list of propositional logic or other symbols
+(defmacro defprecedence [&rest args] `#<~args)
+
+; append to operators-precedence list rather than resetting totally new list
+(defmacro defprecedence+ [&rest args] 
+  `(doto operators-precedence (.extend ~args)) None)
+
+; macro that takes mixed prefix and infix notation clauses
+; for evaluating their value. this is same as calling
+; $ reader macro directly but might be more convenient way
+; inside lips code to use than reader macro syntax
+; there is no need to use parentheses with this macro
+(defmacro deffix [&rest items] `#$~items)
+
+; pass multiple (n) evaluation clauses. each of the must be
+; wrapped by () parentheses
+(defmacro deffix-n [&rest items]
+  (list-comp `#$~item [item items]))
 
 ; helper functions for #$ reader macro
 (eval-and-compile
@@ -24,21 +75,34 @@
       (list (take (dec idx) lst))
       (.append tmp)
       (.extend (list (drop (+ 2 idx) lst)))))
-  
+
   (setv func-type (type (fn []))) 
   
-  (setv func? 
-    (fn [x] 
-      (and (symbol? x)
-           (= (type (eval x)) func-type))))
+  (defn func? [code] 
+    (and (symbol? code)
+         (= (type (eval code)) func-type)))
 
   (defn operator? [code]
-    (or (in code operators)
-      (and (symbol? code)
-           (func? code))))
+    (and ; should not be a collection
+         (not (coll? code))
+         ; should not be one of the custom operands
+         ; without this check unnamed variable error occurs
+         (not (in code operands))
+         (or ; could be a custom operator added with #>
+             (in code operators)
+             ; or one of the native math operators: + - * / = !=
+             (and (symbol? code) (func? code)))))
+
+  (defn one? [code] (= (len code) 1))
+
+  (defn one-operand? [code]
+    (and (one? code)
+         (not (coll? (first code))) 
+         (in (first code) operands)))
 
   (defn one-not-operator? [code]
-    (and (= (len code) 1) (not (operator? (first code)))))
+    (and (one? code)
+         (not (operator? (first code)))))
 
   ; infix
   (defn second-operator? [code]
@@ -59,50 +123,25 @@
   
   (defn third [lst] (get lst 2)))
 
-; function to change precedence order of the operations.
-; argument list will be passed to the #< readermacro which 
-; will reset arguments to a new operators-precedence list
-; example: (defprecedence * / + -)
-; or straight to the reader macro way: #<[* / + -]
-;
-; note that calling this macro will empty the previous list of precedence!
-; to keep the previous set one should use precedence+
-;
-; call (defprecedence) to empty the list to the default state
-; in that case left-wise order of precedence is used when evaluating
-; the list of propositional logic or other symbols
-(defmacro defprecedence [&rest args] `#<~args)
-
-; append to operators-precedence list rather than resetting totally new list
-(defmacro defprecedence+ [&rest args] 
-  `(doto operators-precedence (.extend ~args)))
-
-; macro that takes mixed prefix and infix notation clauses
-; for evaluating their value. this is same as calling
-; $ reader macro directly but might be more convenient way
-; inside lips code to use than reader macro syntax
-; there is no need to use parentheses with this macro
-(defmacro deffix [&rest items] `#$~items)
-
-; pass multiple (n) evaluation clauses. each of the must be
-; wrapped by () parentheses
-(defmacro deffix-n [&rest items]
-  (list-comp `#$~item [item items]))
-
 ; main parser loop for propositional logic clauses
 (defreader $ [code]
   (if
     ; scalar value
-    (not (coll? code)) code
-    ; empty list
-    ;(zero? (len code)) False
+    (not (coll? code))
+      ; if code is one of the custom variables, return the value of it
+      (if (in code operands) 
+          (get operands code)
+          ; else return just the value
+          code)
+    ; list with lenght of 1 and the single item is the operand
+    (one-operand? code) (get operands (first code))
     ; list with lenght of 1 and the single item not being the operator
     (one-not-operator? code) `#$~@code
     ; two or more items, last item is an operator: postfix
     (last-operator? code) `#$(~(last code) ~@(take (dec (len code)) code))
     ; list with three or more items, second is the operator: prefix
     (second-operator? code)
-      (do 
+      (do
         ; the second operator on the list is the default index
         (setv idx 1)
         ; loop over all operators
