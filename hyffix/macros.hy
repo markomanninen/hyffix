@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 ; require > and < reader macros
-(require [hyffix.globals [< > ^]])
+(require [hyffix.globals [< >]])
 ; import operator list. this makes globals.hy executed first
 ; so that operators variable is found in the current scope
 ; setting variable in the same file by setv or eval-and-compile 
@@ -13,17 +13,17 @@
     (defn ~op-name ~params ~@body)
     #>~op-name))
 
-; TODO: try to get operand setter to work via macro
-; so that there is no need to quote variables similar to:
-; (defoperand 'x 1 'y 1)
-;(defmacro defoperand [operand value] `#^[~operand ~value])
-
-(defn defoperand [&rest args]
+; for example: (defoperand x 1 y 2 z 3)
+(defmacro defoperand [&rest args]
+  ; cast tuple to list to make removal of list items work
   (setv args (list args))
+  ; only even number of arguments are accepted
   (if (even? (len args))
       (while (pos? (len args))
              (do
+               ; update dictionary key with a value
                (assoc operands (first args) (second args))
+               ; remove first two arguments (key-value pair)
                (.remove args (get args 0))
                (.remove args (get args 0))))
       (raise (Exception "defoperand needs an even number of arguments"))))

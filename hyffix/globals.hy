@@ -5,9 +5,6 @@
         operators-precedence []
         operands {}))
 
-(defreader ^ [code]
-  (assoc operands (first code) (second code)))
-
 ; add support list for custom operators. note that
 ; native operands like + - * / = or any usual one
 ; doesn't need to be added to the operators list
