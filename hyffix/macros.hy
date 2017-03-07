@@ -9,8 +9,10 @@
 
 ; print multiple statements on new lines
 (defmacro println [&rest args]
-  (for [line args]
-    (print (eval line))))
+  `(do
+    (setv args (list ~args))
+    (for [line args]
+      (print line))))
 
 ; define operator function and set it to operators global list
 (defmacro defoperator [op-name params &rest body]
